@@ -64,14 +64,29 @@
     color: #e8e4d8; font-family: -apple-system, 'Apple SD Gothic Neo', sans-serif;
     font-size: 15px; cursor: pointer; text-align: center; line-height: 1.4;
     -webkit-appearance: none; transition: transform 0.1s;
+    position: relative;
   }
   .choice-btn:active { transform: scale(0.95); }
   .choice-btn .ru-text { display: block; font-size: 17px; font-weight: 700; margin-bottom: 3px; }
   .choice-btn .trans { display: block; font-size: 11px; color: #8a8799; font-style: italic; }
+
   .choice-btn.correct { border-color: #4caf82; background: rgba(76,175,130,0.15); color: #4caf82; }
   .choice-btn.wrong { border-color: #e05c5c; background: rgba(224,92,92,0.12); color: #e05c5c; }
   .choice-btn.disabled { pointer-events: none; opacity: 0.4; }
   .choice-btn.correct .trans, .choice-btn.wrong .trans { color: inherit; opacity: 0.7; }
+
+  /* 🔊 음성 재생 표시 */
+  .choice-btn.speaking { border-color: #c8a96e; }
+  .choice-btn .speak-icon {
+    display: none;
+    position: absolute;
+    top: 7px; right: 9px;
+    font-size: 13px;
+    opacity: 0.6;
+  }
+  .choice-btn.correct .speak-icon,
+  .choice-btn.wrong .speak-icon,
+  .choice-btn.disabled.was-answered .speak-icon { display: block; }
 
   .feedback {
     width: 100%; max-width: 480px;
@@ -119,6 +134,13 @@
   }
 
   .quiz-area { width: 100%; max-width: 480px; display: flex; flex-direction: column; align-items: center; }
+
+  /* 음성 지원 안내 */
+  .tts-notice {
+    width: 100%; max-width: 480px;
+    font-size: 12px; color: #8a8799; text-align: center;
+    margin-bottom: 12px;
+  }
 </style>
 </head>
 <body>
@@ -138,6 +160,7 @@
     <div class="q-word" id="qWord"></div>
     <div class="q-hint" id="qHint"></div>
   </div>
+  <div class="tts-notice" id="ttsNotice">🔊 보기를 선택하면 러시아어 발음을 들을 수 있어요</div>
   <div class="choices" id="choices"></div>
   <div class="feedback hidden" id="feedback"></div>
   <button class="next-btn" id="nextBtn" onclick="nextQuestion()">다음 문제 →</button>
@@ -273,108 +296,153 @@ var words = [
 ];
 
 var shuffled=[], current=0, score=0, correctCnt=0, wrongCnt=0, answered=false;
+var ttsSupported = ('speechSynthesis' in window);
 
-function shuffle(a){
-  var b=a.slice();
-  for(var i=b.length-1;i>0;i--){
-    var j=Math.floor(Math.random()*(i+1));
-    var t=b[i]; b[i]=b[j]; b[j]=t;
+// 러시아어 음성으로 읽어주기
+function speak(text) {
+  if (!ttsSupported) return;
+  window.speechSynthesis.cancel();
+  var utter = new SpeechSynthesisUtterance(text);
+  utter.lang = 'ru-RU';
+  utter.rate = 0.85;
+  utter.pitch = 1.0;
+  window.speechSynthesis.speak(utter);
+}
+
+function shuffle(a) {
+  var b = a.slice();
+  for (var i = b.length-1; i > 0; i--) {
+    var j = Math.floor(Math.random()*(i+1));
+    var t = b[i]; b[i] = b[j]; b[j] = t;
   }
   return b;
 }
 
-function getWrongs(q){
-  var pool=[];
-  for(var i=0;i<words.length;i++){if(words[i].ru!==q.ru)pool.push(words[i]);}
-  return shuffle(pool).slice(0,3);
+function getWrongs(q) {
+  var pool = [];
+  for (var i = 0; i < words.length; i++) {
+    if (words[i].ru !== q.ru) pool.push(words[i]);
+  }
+  return shuffle(pool).slice(0, 3);
 }
 
-function loadQ(){
-  answered=false;
-  var q=shuffled[current];
-  document.getElementById('qNumber').textContent=(current+1)+' / '+shuffled.length;
-  document.getElementById('qWord').textContent=q.ko;
-  document.getElementById('qHint').textContent='['+q.hint+']';
-  document.getElementById('progressBar').style.width=((current/shuffled.length)*100)+'%';
+function loadQ() {
+  answered = false;
+  var q = shuffled[current];
+  document.getElementById('qNumber').textContent = (current+1) + ' / ' + shuffled.length;
+  document.getElementById('qWord').textContent = q.ko;
+  document.getElementById('qHint').textContent = '[' + q.hint + ']';
+  document.getElementById('progressBar').style.width = ((current/shuffled.length)*100) + '%';
 
-  var opts=shuffle([q].concat(getWrongs(q)));
-  var el=document.getElementById('choices');
-  el.innerHTML='';
-  for(var i=0;i<opts.length;i++){
-    (function(o){
-      var b=document.createElement('button');
-      b.className='choice-btn';
-      b.innerHTML='<span class="ru-text">'+o.ru+'</span><span class="trans">'+o.tr+'</span>';
-      b.onclick=function(){checkAns(o.ru===q.ru,b,q);};
+  var opts = shuffle([q].concat(getWrongs(q)));
+  var el = document.getElementById('choices');
+  el.innerHTML = '';
+
+  for (var i = 0; i < opts.length; i++) {
+    (function(o) {
+      var b = document.createElement('button');
+      b.className = 'choice-btn';
+      b.innerHTML = '<span class="speak-icon">🔊</span><span class="ru-text">' + o.ru + '</span><span class="trans">' + o.tr + '</span>';
+      b.onclick = function() { handleChoice(o, b, q); };
       el.appendChild(b);
     })(opts[i]);
   }
 
-  var fb=document.getElementById('feedback');
-  fb.className='feedback hidden'; fb.textContent='';
+  var fb = document.getElementById('feedback');
+  fb.className = 'feedback hidden'; fb.textContent = '';
   document.getElementById('nextBtn').classList.remove('visible');
+
+  // 음성 지원 안내
+  document.getElementById('ttsNotice').style.display = ttsSupported ? 'block' : 'none';
 }
 
-function checkAns(isOk,btn,q){
-  if(answered)return;
-  answered=true;
-  var btns=document.querySelectorAll('.choice-btn');
-  for(var i=0;i<btns.length;i++){
-    var right=btns[i].querySelector('.ru-text').textContent===q.ru;
-    if(right) btns[i].classList.add('correct');
-    else if(btns[i]===btn&&!isOk) btns[i].classList.add('wrong');
-    else btns[i].classList.add('disabled');
+function handleChoice(o, btn, q) {
+  // 음성 재생 (정답 여부 상관없이 선택한 단어 읽기)
+  speak(o.ru);
+
+  // 정답 체크
+  checkAns(o.ru === q.ru, btn, q);
+}
+
+function checkAns(isOk, btn, q) {
+  if (answered) return;
+  answered = true;
+
+  var btns = document.querySelectorAll('.choice-btn');
+  for (var i = 0; i < btns.length; i++) {
+    var right = btns[i].querySelector('.ru-text').textContent === q.ru;
+    if (right) {
+      btns[i].classList.add('correct');
+    } else if (btns[i] === btn && !isOk) {
+      btns[i].classList.add('wrong');
+    } else {
+      btns[i].classList.add('disabled');
+    }
   }
-  var fb=document.getElementById('feedback');
-  if(isOk){
+
+  var fb = document.getElementById('feedback');
+  if (isOk) {
     score++; correctCnt++;
-    document.getElementById('scoreDisplay').textContent=score;
-    fb.className='feedback ok'; fb.textContent='✓ 정답입니다!';
+    document.getElementById('scoreDisplay').textContent = score;
+    fb.className = 'feedback ok';
+    fb.textContent = '✓ 정답입니다!';
   } else {
     wrongCnt++;
-    fb.className='feedback no'; fb.textContent='✗ 정답: '+q.ru+' ('+q.tr+')';
+    fb.className = 'feedback no';
+    fb.textContent = '✗ 정답: ' + q.ru + ' (' + q.tr + ')';
+    // 오답일 때 정답 단어도 읽어주기 (1.2초 후)
+    (function(correctRu) {
+      setTimeout(function() { speak(correctRu); }, 1200);
+    })(q.ru);
   }
   document.getElementById('nextBtn').classList.add('visible');
 }
 
-function nextQuestion(){
+function nextQuestion() {
+  window.speechSynthesis && window.speechSynthesis.cancel();
   current++;
-  if(current>=shuffled.length) showResult();
+  if (current >= shuffled.length) showResult();
   else loadQ();
 }
 
-function showResult(){
-  document.getElementById('quizArea').style.display='none';
-  document.querySelector('.header').style.display='none';
-  document.querySelector('.progress-bar-wrap').style.display='none';
+function showResult() {
+  document.getElementById('quizArea').style.display = 'none';
+  document.querySelector('.header').style.display = 'none';
+  document.querySelector('.progress-bar-wrap').style.display = 'none';
   document.getElementById('resultScreen').classList.add('visible');
-  document.getElementById('progressBar').style.width='100%';
-  var total=shuffled.length, pct=Math.round((score/total)*100);
-  document.getElementById('resultBig').textContent=score;
-  document.getElementById('resultLabel').textContent='점 / '+total+'점';
-  document.getElementById('statC').textContent=correctCnt;
-  document.getElementById('statW').textContent=wrongCnt;
-  var emoji,title,sub;
-  if(pct>=90){emoji='🏆';title='완벽해요!';sub='러시아어 실력이 대단합니다!';}
-  else if(pct>=70){emoji='🎉';title='훌륭해요!';sub='잘 하고 있어요, 계속 연습하세요!';}
-  else if(pct>=50){emoji='📚';title='좋아요!';sub='조금 더 연습하면 완벽해질 거예요!';}
-  else{emoji='💪';title='계속 도전!';sub='다시 한 번 도전해봐요!';}
-  document.getElementById('resultEmoji').textContent=emoji;
-  document.getElementById('resultTitle').textContent=title;
-  document.getElementById('resultSub').textContent=sub;
+  document.getElementById('progressBar').style.width = '100%';
+
+  var total = shuffled.length;
+  var pct = Math.round((score/total)*100);
+  document.getElementById('resultBig').textContent = score;
+  document.getElementById('resultLabel').textContent = '점 / ' + total + '점';
+  document.getElementById('statC').textContent = correctCnt;
+  document.getElementById('statW').textContent = wrongCnt;
+
+  var emoji, title, sub;
+  if (pct >= 90)      { emoji='🏆'; title='완벽해요!';   sub='러시아어 실력이 대단합니다!'; }
+  else if (pct >= 70) { emoji='🎉'; title='훌륭해요!';   sub='잘 하고 있어요, 계속 연습하세요!'; }
+  else if (pct >= 50) { emoji='📚'; title='좋아요!';     sub='조금 더 연습하면 완벽해질 거예요!'; }
+  else                { emoji='💪'; title='계속 도전!';  sub='다시 한 번 도전해봐요!'; }
+
+  document.getElementById('resultEmoji').textContent = emoji;
+  document.getElementById('resultTitle').textContent = title;
+  document.getElementById('resultSub').textContent = sub;
 }
 
-function restartQuiz(){
-  score=correctCnt=wrongCnt=current=0;
-  document.getElementById('scoreDisplay').textContent='0';
+function restartQuiz() {
+  score = correctCnt = wrongCnt = current = 0;
+  document.getElementById('scoreDisplay').textContent = '0';
   document.getElementById('resultScreen').classList.remove('visible');
-  document.getElementById('quizArea').style.display='flex';
-  document.querySelector('.header').style.display='flex';
-  document.querySelector('.progress-bar-wrap').style.display='block';
-  shuffled=shuffle(words); loadQ();
+  document.getElementById('quizArea').style.display = 'flex';
+  document.querySelector('.header').style.display = 'flex';
+  document.querySelector('.progress-bar-wrap').style.display = 'block';
+  shuffled = shuffle(words);
+  loadQ();
 }
 
-shuffled=shuffle(words); loadQ();
+shuffled = shuffle(words);
+loadQ();
 </script>
 </body>
 </html>
