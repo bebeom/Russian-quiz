@@ -21,6 +21,34 @@
     padding: env(safe-area-inset-top, 20px) 16px env(safe-area-inset-bottom, 20px);
   }
 
+  /* 시작 화면 */
+  .start-screen {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: #0f1117;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    padding: 32px;
+  }
+  .start-flag { font-size: 72px; margin-bottom: 24px; }
+  .start-title { font-size: 26px; font-weight: 700; color: #c8a96e; margin-bottom: 10px; }
+  .start-sub { font-size: 15px; color: #8a8799; margin-bottom: 48px; text-align: center; line-height: 1.6; }
+  .start-btn {
+    width: 100%; max-width: 320px;
+    background: #c8a96e; color: #1a1005; border: none;
+    border-radius: 16px; padding: 18px;
+    font-family: -apple-system, 'Apple SD Gothic Neo', sans-serif;
+    font-size: 18px; font-weight: 700; cursor: pointer;
+    -webkit-appearance: none;
+  }
+  .start-btn:active { transform: scale(0.97); }
+  .start-note {
+    font-size: 12px; color: #8a8799; margin-top: 16px; text-align: center;
+  }
+
   .header {
     width: 100%; max-width: 480px;
     display: flex; align-items: center; justify-content: space-between;
@@ -64,29 +92,14 @@
     color: #e8e4d8; font-family: -apple-system, 'Apple SD Gothic Neo', sans-serif;
     font-size: 15px; cursor: pointer; text-align: center; line-height: 1.4;
     -webkit-appearance: none; transition: transform 0.1s;
-    position: relative;
   }
   .choice-btn:active { transform: scale(0.95); }
   .choice-btn .ru-text { display: block; font-size: 17px; font-weight: 700; margin-bottom: 3px; }
   .choice-btn .trans { display: block; font-size: 11px; color: #8a8799; font-style: italic; }
-
   .choice-btn.correct { border-color: #4caf82; background: rgba(76,175,130,0.15); color: #4caf82; }
   .choice-btn.wrong { border-color: #e05c5c; background: rgba(224,92,92,0.12); color: #e05c5c; }
   .choice-btn.disabled { pointer-events: none; opacity: 0.4; }
   .choice-btn.correct .trans, .choice-btn.wrong .trans { color: inherit; opacity: 0.7; }
-
-  /* 🔊 음성 재생 표시 */
-  .choice-btn.speaking { border-color: #c8a96e; }
-  .choice-btn .speak-icon {
-    display: none;
-    position: absolute;
-    top: 7px; right: 9px;
-    font-size: 13px;
-    opacity: 0.6;
-  }
-  .choice-btn.correct .speak-icon,
-  .choice-btn.wrong .speak-icon,
-  .choice-btn.disabled.was-answered .speak-icon { display: block; }
 
   .feedback {
     width: 100%; max-width: 480px;
@@ -109,7 +122,6 @@
   .next-btn:active { transform: scale(0.97); }
   .next-btn.visible { display: block; }
 
-  /* 결과 화면 */
   .result-screen {
     width: 100%; max-width: 480px; text-align: center;
     display: none; flex-direction: column; align-items: center; padding: 20px 0;
@@ -134,16 +146,18 @@
   }
 
   .quiz-area { width: 100%; max-width: 480px; display: flex; flex-direction: column; align-items: center; }
-
-  /* 음성 지원 안내 */
-  .tts-notice {
-    width: 100%; max-width: 480px;
-    font-size: 12px; color: #8a8799; text-align: center;
-    margin-bottom: 12px;
-  }
 </style>
 </head>
 <body>
+
+<!-- 시작 화면 (iOS 음성 활성화용) -->
+<div class="start-screen" id="startScreen">
+  <div class="start-flag">🇷🇺</div>
+  <div class="start-title">러시아어 퀴즈</div>
+  <div class="start-sub">한국어 단어를 보고<br>러시아어 보기를 선택하세요<br>선택하면 발음을 들을 수 있어요</div>
+  <button class="start-btn" onclick="startQuiz()">🔊 시작하기</button>
+  <div class="start-note">버튼을 탭하면 음성이 활성화됩니다</div>
+</div>
 
 <div class="header">
   <div class="app-title">🇷🇺 러시아어 퀴즈</div>
@@ -160,7 +174,6 @@
     <div class="q-word" id="qWord"></div>
     <div class="q-hint" id="qHint"></div>
   </div>
-  <div class="tts-notice" id="ttsNotice">🔊 보기를 선택하면 러시아어 발음을 들을 수 있어요</div>
   <div class="choices" id="choices"></div>
   <div class="feedback hidden" id="feedback"></div>
   <button class="next-btn" id="nextBtn" onclick="nextQuestion()">다음 문제 →</button>
@@ -296,17 +309,25 @@ var words = [
 ];
 
 var shuffled=[], current=0, score=0, correctCnt=0, wrongCnt=0, answered=false;
-var ttsSupported = ('speechSynthesis' in window);
+var ttsReady = false;
 
-// 러시아어 음성으로 읽어주기
 function speak(text) {
-  if (!ttsSupported) return;
+  if (!('speechSynthesis' in window)) return;
   window.speechSynthesis.cancel();
   var utter = new SpeechSynthesisUtterance(text);
   utter.lang = 'ru-RU';
   utter.rate = 0.85;
   utter.pitch = 1.0;
   window.speechSynthesis.speak(utter);
+}
+
+function startQuiz() {
+  // 시작 버튼 터치로 iOS 음성 컨텍스트 활성화
+  speak(' ');
+  ttsReady = true;
+  document.getElementById('startScreen').style.display = 'none';
+  shuffled = shuffle(words);
+  loadQ();
 }
 
 function shuffle(a) {
@@ -342,7 +363,7 @@ function loadQ() {
     (function(o) {
       var b = document.createElement('button');
       b.className = 'choice-btn';
-      b.innerHTML = '<span class="speak-icon">🔊</span><span class="ru-text">' + o.ru + '</span><span class="trans">' + o.tr + '</span>';
+      b.innerHTML = '<span class="ru-text">' + o.ru + '</span><span class="trans">' + o.tr + '</span>';
       b.onclick = function() { handleChoice(o, b, q); };
       el.appendChild(b);
     })(opts[i]);
@@ -351,16 +372,10 @@ function loadQ() {
   var fb = document.getElementById('feedback');
   fb.className = 'feedback hidden'; fb.textContent = '';
   document.getElementById('nextBtn').classList.remove('visible');
-
-  // 음성 지원 안내
-  document.getElementById('ttsNotice').style.display = ttsSupported ? 'block' : 'none';
 }
 
 function handleChoice(o, btn, q) {
-  // 음성 재생 (정답 여부 상관없이 선택한 단어 읽기)
   speak(o.ru);
-
-  // 정답 체크
   checkAns(o.ru === q.ru, btn, q);
 }
 
@@ -371,13 +386,9 @@ function checkAns(isOk, btn, q) {
   var btns = document.querySelectorAll('.choice-btn');
   for (var i = 0; i < btns.length; i++) {
     var right = btns[i].querySelector('.ru-text').textContent === q.ru;
-    if (right) {
-      btns[i].classList.add('correct');
-    } else if (btns[i] === btn && !isOk) {
-      btns[i].classList.add('wrong');
-    } else {
-      btns[i].classList.add('disabled');
-    }
+    if (right) btns[i].classList.add('correct');
+    else if (btns[i] === btn && !isOk) btns[i].classList.add('wrong');
+    else btns[i].classList.add('disabled');
   }
 
   var fb = document.getElementById('feedback');
@@ -390,7 +401,6 @@ function checkAns(isOk, btn, q) {
     wrongCnt++;
     fb.className = 'feedback no';
     fb.textContent = '✗ 정답: ' + q.ru + ' (' + q.tr + ')';
-    // 오답일 때 정답 단어도 읽어주기 (1.2초 후)
     (function(correctRu) {
       setTimeout(function() { speak(correctRu); }, 1200);
     })(q.ru);
@@ -420,10 +430,10 @@ function showResult() {
   document.getElementById('statW').textContent = wrongCnt;
 
   var emoji, title, sub;
-  if (pct >= 90)      { emoji='🏆'; title='완벽해요!';   sub='러시아어 실력이 대단합니다!'; }
-  else if (pct >= 70) { emoji='🎉'; title='훌륭해요!';   sub='잘 하고 있어요, 계속 연습하세요!'; }
-  else if (pct >= 50) { emoji='📚'; title='좋아요!';     sub='조금 더 연습하면 완벽해질 거예요!'; }
-  else                { emoji='💪'; title='계속 도전!';  sub='다시 한 번 도전해봐요!'; }
+  if (pct >= 90)      { emoji='🏆'; title='완벽해요!';  sub='러시아어 실력이 대단합니다!'; }
+  else if (pct >= 70) { emoji='🎉'; title='훌륭해요!';  sub='잘 하고 있어요, 계속 연습하세요!'; }
+  else if (pct >= 50) { emoji='📚'; title='좋아요!';    sub='조금 더 연습하면 완벽해질 거예요!'; }
+  else                { emoji='💪'; title='계속 도전!'; sub='다시 한 번 도전해봐요!'; }
 
   document.getElementById('resultEmoji').textContent = emoji;
   document.getElementById('resultTitle').textContent = title;
@@ -440,9 +450,6 @@ function restartQuiz() {
   shuffled = shuffle(words);
   loadQ();
 }
-
-shuffled = shuffle(words);
-loadQ();
 </script>
 </body>
 </html>
