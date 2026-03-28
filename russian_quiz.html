@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="러시아어 퀴즈">
+<title>러시아어 단어 퀴즈</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+  body {
+    font-family: -apple-system, 'Apple SD Gothic Neo', sans-serif;
+    background: #0f1117;
+    color: #e8e4d8;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: env(safe-area-inset-top, 20px) 16px env(safe-area-inset-bottom, 20px);
+  }
+
+  .header {
+    width: 100%; max-width: 480px;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 20px 4px 16px;
+  }
+  .app-title { font-size: 18px; font-weight: 700; color: #c8a96e; }
+  .score-badge {
+    font-size: 13px; color: #8a8799;
+    background: #1a1d2e; border: 1px solid rgba(200,169,110,0.25);
+    border-radius: 20px; padding: 4px 14px;
+  }
+  .score-badge span { color: #c8a96e; font-weight: 700; }
+
+  .progress-bar-wrap {
+    width: 100%; max-width: 480px; height: 4px;
+    background: #1a1d2e; border-radius: 2px; margin-bottom: 24px; overflow: hidden;
+  }
+  .progress-bar {
+    height: 100%; background: linear-gradient(90deg, #8b6fd4, #c8a96e);
+    border-radius: 2px; transition: width 0.4s ease;
+  }
+
+  .question-card {
+    width: 100%; max-width: 480px;
+    background: #1a1d2e; border: 1px solid rgba(200,169,110,0.2);
+    border-radius: 20px; padding: 28px 24px;
+    margin-bottom: 16px; text-align: center;
+  }
+  .q-number { font-size: 12px; color: #8b6fd4; margin-bottom: 10px; }
+  .q-label { font-size: 11px; letter-spacing: 2px; color: #8a8799; margin-bottom: 14px; }
+  .q-word { font-size: 36px; font-weight: 700; color: #e8e4d8; line-height: 1.2; margin-bottom: 8px; }
+  .q-hint { font-size: 13px; color: #8a8799; }
+
+  .choices {
+    width: 100%; max-width: 480px;
+    display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 16px;
+  }
+  .choice-btn {
+    background: #20243a; border: 1.5px solid rgba(200,169,110,0.2);
+    border-radius: 14px; padding: 16px 10px;
+    color: #e8e4d8; font-family: -apple-system, 'Apple SD Gothic Neo', sans-serif;
+    font-size: 15px; cursor: pointer; text-align: center; line-height: 1.4;
+    -webkit-appearance: none; transition: transform 0.1s;
+  }
+  .choice-btn:active { transform: scale(0.95); }
+  .choice-btn .ru-text { display: block; font-size: 17px; font-weight: 700; margin-bottom: 3px; }
+  .choice-btn .trans { display: block; font-size: 11px; color: #8a8799; font-style: italic; }
+  .choice-btn.correct { border-color: #4caf82; background: rgba(76,175,130,0.15); color: #4caf82; }
+  .choice-btn.wrong { border-color: #e05c5c; background: rgba(224,92,92,0.12); color: #e05c5c; }
+  .choice-btn.disabled { pointer-events: none; opacity: 0.4; }
+  .choice-btn.correct .trans, .choice-btn.wrong .trans { color: inherit; opacity: 0.7; }
+
+  .feedback {
+    width: 100%; max-width: 480px;
+    min-height: 50px; text-align: center; font-size: 15px;
+    padding: 13px 20px; border-radius: 14px; margin-bottom: 14px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .feedback.hidden { visibility: hidden; }
+  .feedback.ok { background: rgba(76,175,130,0.12); color: #4caf82; border: 1px solid rgba(76,175,130,0.3); }
+  .feedback.no { background: rgba(224,92,92,0.08); color: #e05c5c; border: 1px solid rgba(224,92,92,0.25); }
+
+  .next-btn {
+    width: 100%; max-width: 480px;
+    background: #c8a96e; color: #1a1005; border: none;
+    border-radius: 14px; padding: 16px;
+    font-family: -apple-system, 'Apple SD Gothic Neo', sans-serif;
+    font-size: 16px; font-weight: 700; cursor: pointer;
+    display: none; -webkit-appearance: none;
+  }
+  .next-btn:active { transform: scale(0.97); }
+  .next-btn.visible { display: block; }
+
+  /* 결과 화면 */
+  .result-screen {
+    width: 100%; max-width: 480px; text-align: center;
+    display: none; flex-direction: column; align-items: center; padding: 20px 0;
+  }
+  .result-screen.visible { display: flex; }
+  .result-emoji { font-size: 60px; margin-bottom: 14px; }
+  .result-title { font-size: 26px; font-weight: 700; color: #c8a96e; margin-bottom: 6px; }
+  .result-sub { font-size: 14px; color: #8a8799; margin-bottom: 28px; }
+  .result-score-big { font-size: 60px; font-weight: 700; color: #e8e4d8; line-height: 1; margin-bottom: 4px; }
+  .result-score-label { font-size: 13px; color: #8a8799; margin-bottom: 28px; }
+  .result-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; width: 100%; margin-bottom: 28px; }
+  .stat-card { background: #1a1d2e; border: 1px solid rgba(200,169,110,0.2); border-radius: 14px; padding: 16px; }
+  .stat-card .stat-val { font-size: 28px; font-weight: 700; margin-bottom: 2px; }
+  .stat-card .stat-label { font-size: 12px; color: #8a8799; }
+  .stat-card.c .stat-val { color: #4caf82; }
+  .stat-card.w .stat-val { color: #e05c5c; }
+  .restart-btn {
+    width: 100%; background: #c8a96e; color: #1a1005; border: none;
+    border-radius: 14px; padding: 16px;
+    font-family: -apple-system, 'Apple SD Gothic Neo', sans-serif;
+    font-size: 16px; font-weight: 700; cursor: pointer; -webkit-appearance: none;
+  }
+
+  .quiz-area { width: 100%; max-width: 480px; display: flex; flex-direction: column; align-items: center; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="app-title">🇷🇺 러시아어 퀴즈</div>
+  <div class="score-badge">점수 <span id="scoreDisplay">0</span></div>
+</div>
+<div class="progress-bar-wrap">
+  <div class="progress-bar" id="progressBar" style="width:0%"></div>
+</div>
+
+<div class="quiz-area" id="quizArea">
+  <div class="question-card">
+    <div class="q-number" id="qNumber">1 / 100</div>
+    <div class="q-label">이 단어를 러시아어로?</div>
+    <div class="q-word" id="qWord"></div>
+    <div class="q-hint" id="qHint"></div>
+  </div>
+  <div class="choices" id="choices"></div>
+  <div class="feedback hidden" id="feedback"></div>
+  <button class="next-btn" id="nextBtn" onclick="nextQuestion()">다음 문제 →</button>
+</div>
+
+<div class="result-screen" id="resultScreen">
+  <div class="result-emoji" id="resultEmoji">🎉</div>
+  <div class="result-title" id="resultTitle">훌륭해요!</div>
+  <div class="result-sub" id="resultSub">퀴즈를 완료했습니다</div>
+  <div class="result-score-big" id="resultBig">0</div>
+  <div class="result-score-label" id="resultLabel">점 / 100점</div>
+  <div class="result-stats">
+    <div class="stat-card c"><div class="stat-val" id="statC">0</div><div class="stat-label">정답</div></div>
+    <div class="stat-card w"><div class="stat-val" id="statW">0</div><div class="stat-label">오답</div></div>
+  </div>
+  <button class="restart-btn" onclick="restartQuiz()">🔄 다시 풀기</button>
+</div>
+
+<script>
+var words = [
+  {ko:"안녕하세요",ru:"Привет",tr:"Privet",hint:"인사"},
+  {ko:"감사합니다",ru:"Спасибо",tr:"Spasibo",hint:"인사"},
+  {ko:"네",ru:"Да",tr:"Da",hint:"기본"},
+  {ko:"아니요",ru:"Нет",tr:"Net",hint:"기본"},
+  {ko:"제발",ru:"Пожалуйста",tr:"Pozhaluysta",hint:"기본"},
+  {ko:"미안합니다",ru:"Извините",tr:"Izvinite",hint:"인사"},
+  {ko:"안녕히 가세요",ru:"До свидания",tr:"Do svidaniya",hint:"인사"},
+  {ko:"좋은 아침",ru:"Доброе утро",tr:"Dobroye utro",hint:"인사"},
+  {ko:"좋은 저녁",ru:"Добрый вечер",tr:"Dobryy vecher",hint:"인사"},
+  {ko:"사랑해요",ru:"Я люблю тебя",tr:"Ya lyublyu tebya",hint:"인사"},
+  {ko:"사람",ru:"Человек",tr:"Chelovek",hint:"명사"},
+  {ko:"남자",ru:"Мужчина",tr:"Muzhchina",hint:"명사"},
+  {ko:"여자",ru:"Женщина",tr:"Zhenshchina",hint:"명사"},
+  {ko:"아이",ru:"Ребёнок",tr:"Rebyonok",hint:"명사"},
+  {ko:"친구",ru:"Друг",tr:"Drug",hint:"명사"},
+  {ko:"엄마",ru:"Мама",tr:"Mama",hint:"가족"},
+  {ko:"아빠",ru:"Папа",tr:"Papa",hint:"가족"},
+  {ko:"형/오빠",ru:"Брат",tr:"Brat",hint:"가족"},
+  {ko:"언니/누나",ru:"Сестра",tr:"Sestra",hint:"가족"},
+  {ko:"할머니",ru:"Бабушка",tr:"Babushka",hint:"가족"},
+  {ko:"할아버지",ru:"Дедушка",tr:"Dedushka",hint:"가족"},
+  {ko:"남편",ru:"Муж",tr:"Muzh",hint:"가족"},
+  {ko:"아내",ru:"Жена",tr:"Zhena",hint:"가족"},
+  {ko:"아들",ru:"Сын",tr:"Syn",hint:"가족"},
+  {ko:"딸",ru:"Дочь",tr:"Doch'",hint:"가족"},
+  {ko:"물",ru:"Вода",tr:"Voda",hint:"음료"},
+  {ko:"빵",ru:"Хлеб",tr:"Khleb",hint:"음식"},
+  {ko:"음식",ru:"Еда",tr:"Yeda",hint:"명사"},
+  {ko:"차 (음료)",ru:"Чай",tr:"Chay",hint:"음료"},
+  {ko:"커피",ru:"Кофе",tr:"Kofe",hint:"음료"},
+  {ko:"우유",ru:"Молоко",tr:"Moloko",hint:"음료"},
+  {ko:"고기",ru:"Мясо",tr:"Myaso",hint:"음식"},
+  {ko:"생선",ru:"Рыба",tr:"Ryba",hint:"음식"},
+  {ko:"수프",ru:"Суп",tr:"Sup",hint:"음식"},
+  {ko:"사과",ru:"Яблоко",tr:"Yabloko",hint:"과일"},
+  {ko:"오렌지",ru:"Апельсин",tr:"Apel'sin",hint:"과일"},
+  {ko:"바나나",ru:"Банан",tr:"Banan",hint:"과일"},
+  {ko:"소금",ru:"Соль",tr:"Sol'",hint:"조미료"},
+  {ko:"설탕",ru:"Сахар",tr:"Sakhar",hint:"조미료"},
+  {ko:"버터",ru:"Масло",tr:"Maslo",hint:"음식"},
+  {ko:"달걀",ru:"Яйцо",tr:"Yaytso",hint:"음식"},
+  {ko:"치즈",ru:"Сыр",tr:"Syr",hint:"음식"},
+  {ko:"쌀",ru:"Рис",tr:"Ris",hint:"음식"},
+  {ko:"감자",ru:"Картофель",tr:"Kartofel'",hint:"음식"},
+  {ko:"당근",ru:"Морковь",tr:"Morkov'",hint:"음식"},
+  {ko:"집",ru:"Дом",tr:"Dom",hint:"장소"},
+  {ko:"학교",ru:"Школа",tr:"Shkola",hint:"장소"},
+  {ko:"병원",ru:"Больница",tr:"Bol'nitsa",hint:"장소"},
+  {ko:"상점",ru:"Магазин",tr:"Magazin",hint:"장소"},
+  {ko:"도시",ru:"Город",tr:"Gorod",hint:"장소"},
+  {ko:"길",ru:"Дорога",tr:"Doroga",hint:"장소"},
+  {ko:"공원",ru:"Парк",tr:"Park",hint:"장소"},
+  {ko:"호텔",ru:"Гостиница",tr:"Gostinitsa",hint:"장소"},
+  {ko:"공항",ru:"Аэропорт",tr:"Aeroport",hint:"장소"},
+  {ko:"식당",ru:"Ресторан",tr:"Restoran",hint:"장소"},
+  {ko:"태양",ru:"Солнце",tr:"Solntse",hint:"자연"},
+  {ko:"달",ru:"Луна",tr:"Luna",hint:"자연"},
+  {ko:"별",ru:"Звезда",tr:"Zvezda",hint:"자연"},
+  {ko:"하늘",ru:"Небо",tr:"Nebo",hint:"자연"},
+  {ko:"바다",ru:"Море",tr:"More",hint:"자연"},
+  {ko:"강",ru:"Река",tr:"Reka",hint:"자연"},
+  {ko:"산",ru:"Гора",tr:"Gora",hint:"자연"},
+  {ko:"나무",ru:"Дерево",tr:"Derevo",hint:"자연"},
+  {ko:"꽃",ru:"Цветок",tr:"Tsvetok",hint:"자연"},
+  {ko:"눈 (雪)",ru:"Снег",tr:"Sneg",hint:"날씨"},
+  {ko:"비",ru:"Дождь",tr:"Dozhd'",hint:"날씨"},
+  {ko:"바람",ru:"Ветер",tr:"Veter",hint:"날씨"},
+  {ko:"불",ru:"Огонь",tr:"Ogon'",hint:"자연"},
+  {ko:"땅",ru:"Земля",tr:"Zemlya",hint:"자연"},
+  {ko:"개",ru:"Собака",tr:"Sobaka",hint:"동물"},
+  {ko:"고양이",ru:"Кошка",tr:"Koshka",hint:"동물"},
+  {ko:"새",ru:"Птица",tr:"Ptitsa",hint:"동물"},
+  {ko:"말",ru:"Лошадь",tr:"Loshad'",hint:"동물"},
+  {ko:"소",ru:"Корова",tr:"Korova",hint:"동물"},
+  {ko:"책",ru:"Книга",tr:"Kniga",hint:"물건"},
+  {ko:"의자",ru:"Стул",tr:"Stul",hint:"가구"},
+  {ko:"탁자",ru:"Стол",tr:"Stol",hint:"가구"},
+  {ko:"문",ru:"Дверь",tr:"Dver'",hint:"건물"},
+  {ko:"창문",ru:"Окно",tr:"Okno",hint:"건물"},
+  {ko:"전화",ru:"Телефон",tr:"Telefon",hint:"물건"},
+  {ko:"자동차",ru:"Машина",tr:"Mashina",hint:"교통"},
+  {ko:"기차",ru:"Поезд",tr:"Poyezd",hint:"교통"},
+  {ko:"비행기",ru:"Самолёт",tr:"Samolyot",hint:"교통"},
+  {ko:"돈",ru:"Деньги",tr:"Den'gi",hint:"명사"},
+  {ko:"열쇠",ru:"Ключ",tr:"Klyuch",hint:"물건"},
+  {ko:"가방",ru:"Сумка",tr:"Sumka",hint:"물건"},
+  {ko:"옷",ru:"Одежда",tr:"Odezhda",hint:"물건"},
+  {ko:"신발",ru:"Обувь",tr:"Obuv'",hint:"물건"},
+  {ko:"시계",ru:"Часы",tr:"Chasy",hint:"물건"},
+  {ko:"시간",ru:"Время",tr:"Vremya",hint:"시간"},
+  {ko:"날",ru:"День",tr:"Den'",hint:"시간"},
+  {ko:"밤",ru:"Ночь",tr:"Noch'",hint:"시간"},
+  {ko:"아침",ru:"Утро",tr:"Utro",hint:"시간"},
+  {ko:"저녁",ru:"Вечер",tr:"Vecher",hint:"시간"},
+  {ko:"오늘",ru:"Сегодня",tr:"Segodnya",hint:"시간"},
+  {ko:"내일",ru:"Завтра",tr:"Zavtra",hint:"시간"},
+  {ko:"어제",ru:"Вчера",tr:"Vchera",hint:"시간"},
+  {ko:"크다",ru:"Большой",tr:"Bol'shoy",hint:"형용사"},
+  {ko:"작다",ru:"Маленький",tr:"Malen'kiy",hint:"형용사"},
+  {ko:"좋다",ru:"Хороший",tr:"Khoroshiy",hint:"형용사"},
+  {ko:"나쁘다",ru:"Плохой",tr:"Plokhoy",hint:"형용사"},
+  {ko:"빠르다",ru:"Быстрый",tr:"Bystryy",hint:"형용사"},
+  {ko:"하얀색",ru:"Белый",tr:"Belyy",hint:"색깔"},
+  {ko:"검은색",ru:"Чёрный",tr:"Chyornyy",hint:"색깔"},
+  {ko:"빨간색",ru:"Красный",tr:"Krasnyy",hint:"색깔"},
+  {ko:"파란색",ru:"Синий",tr:"Siniy",hint:"색깔"},
+  {ko:"초록색",ru:"Зелёный",tr:"Zelyonyy",hint:"색깔"},
+  {ko:"가다",ru:"Идти",tr:"Idti",hint:"동사"},
+  {ko:"오다",ru:"Приходить",tr:"Prikhodit'",hint:"동사"},
+  {ko:"먹다",ru:"Есть",tr:"Yest'",hint:"동사"},
+  {ko:"마시다",ru:"Пить",tr:"Pit'",hint:"동사"},
+  {ko:"말하다",ru:"Говорить",tr:"Govorit'",hint:"동사"}
+];
+
+var shuffled=[], current=0, score=0, correctCnt=0, wrongCnt=0, answered=false;
+
+function shuffle(a){
+  var b=a.slice();
+  for(var i=b.length-1;i>0;i--){
+    var j=Math.floor(Math.random()*(i+1));
+    var t=b[i]; b[i]=b[j]; b[j]=t;
+  }
+  return b;
+}
+
+function getWrongs(q){
+  var pool=[];
+  for(var i=0;i<words.length;i++){if(words[i].ru!==q.ru)pool.push(words[i]);}
+  return shuffle(pool).slice(0,3);
+}
+
+function loadQ(){
+  answered=false;
+  var q=shuffled[current];
+  document.getElementById('qNumber').textContent=(current+1)+' / '+shuffled.length;
+  document.getElementById('qWord').textContent=q.ko;
+  document.getElementById('qHint').textContent='['+q.hint+']';
+  document.getElementById('progressBar').style.width=((current/shuffled.length)*100)+'%';
+
+  var opts=shuffle([q].concat(getWrongs(q)));
+  var el=document.getElementById('choices');
+  el.innerHTML='';
+  for(var i=0;i<opts.length;i++){
+    (function(o){
+      var b=document.createElement('button');
+      b.className='choice-btn';
+      b.innerHTML='<span class="ru-text">'+o.ru+'</span><span class="trans">'+o.tr+'</span>';
+      b.onclick=function(){checkAns(o.ru===q.ru,b,q);};
+      el.appendChild(b);
+    })(opts[i]);
+  }
+
+  var fb=document.getElementById('feedback');
+  fb.className='feedback hidden'; fb.textContent='';
+  document.getElementById('nextBtn').classList.remove('visible');
+}
+
+function checkAns(isOk,btn,q){
+  if(answered)return;
+  answered=true;
+  var btns=document.querySelectorAll('.choice-btn');
+  for(var i=0;i<btns.length;i++){
+    var right=btns[i].querySelector('.ru-text').textContent===q.ru;
+    if(right) btns[i].classList.add('correct');
+    else if(btns[i]===btn&&!isOk) btns[i].classList.add('wrong');
+    else btns[i].classList.add('disabled');
+  }
+  var fb=document.getElementById('feedback');
+  if(isOk){
+    score++; correctCnt++;
+    document.getElementById('scoreDisplay').textContent=score;
+    fb.className='feedback ok'; fb.textContent='✓ 정답입니다!';
+  } else {
+    wrongCnt++;
+    fb.className='feedback no'; fb.textContent='✗ 정답: '+q.ru+' ('+q.tr+')';
+  }
+  document.getElementById('nextBtn').classList.add('visible');
+}
+
+function nextQuestion(){
+  current++;
+  if(current>=shuffled.length) showResult();
+  else loadQ();
+}
+
+function showResult(){
+  document.getElementById('quizArea').style.display='none';
+  document.querySelector('.header').style.display='none';
+  document.querySelector('.progress-bar-wrap').style.display='none';
+  document.getElementById('resultScreen').classList.add('visible');
+  document.getElementById('progressBar').style.width='100%';
+  var total=shuffled.length, pct=Math.round((score/total)*100);
+  document.getElementById('resultBig').textContent=score;
+  document.getElementById('resultLabel').textContent='점 / '+total+'점';
+  document.getElementById('statC').textContent=correctCnt;
+  document.getElementById('statW').textContent=wrongCnt;
+  var emoji,title,sub;
+  if(pct>=90){emoji='🏆';title='완벽해요!';sub='러시아어 실력이 대단합니다!';}
+  else if(pct>=70){emoji='🎉';title='훌륭해요!';sub='잘 하고 있어요, 계속 연습하세요!';}
+  else if(pct>=50){emoji='📚';title='좋아요!';sub='조금 더 연습하면 완벽해질 거예요!';}
+  else{emoji='💪';title='계속 도전!';sub='다시 한 번 도전해봐요!';}
+  document.getElementById('resultEmoji').textContent=emoji;
+  document.getElementById('resultTitle').textContent=title;
+  document.getElementById('resultSub').textContent=sub;
+}
+
+function restartQuiz(){
+  score=correctCnt=wrongCnt=current=0;
+  document.getElementById('scoreDisplay').textContent='0';
+  document.getElementById('resultScreen').classList.remove('visible');
+  document.getElementById('quizArea').style.display='flex';
+  document.querySelector('.header').style.display='flex';
+  document.querySelector('.progress-bar-wrap').style.display='block';
+  shuffled=shuffle(words); loadQ();
+}
+
+shuffled=shuffle(words); loadQ();
+</script>
+</body>
+</html>
