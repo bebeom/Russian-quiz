@@ -7,6 +7,8 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="러시아어 퀴즈">
 <title>러시아어 단어 퀴즈</title>
+<!-- 버전: 업데이트할 때마다 이 숫자를 바꾸면 자동으로 새로고침됨 -->
+<meta name="app-version" content="4">
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
 
@@ -21,7 +23,6 @@
     padding: env(safe-area-inset-top, 20px) 16px env(safe-area-inset-bottom, 20px);
   }
 
-  /* 시작 화면 */
   .start-screen {
     position: fixed;
     top: 0; left: 0; right: 0; bottom: 0;
@@ -45,9 +46,7 @@
     -webkit-appearance: none;
   }
   .start-btn:active { transform: scale(0.97); }
-  .start-note {
-    font-size: 12px; color: #8a8799; margin-top: 16px; text-align: center;
-  }
+  .start-note { font-size: 12px; color: #8a8799; margin-top: 16px; text-align: center; }
 
   .header {
     width: 100%; max-width: 480px;
@@ -150,7 +149,6 @@
 </head>
 <body>
 
-<!-- 시작 화면 (iOS 음성 활성화용) -->
 <div class="start-screen" id="startScreen">
   <div class="start-flag">🇷🇺</div>
   <div class="start-title">러시아어 퀴즈</div>
@@ -193,6 +191,86 @@
 </div>
 
 <script>
+// ────────────────────────────────────────────
+// 자동 업데이트 체크
+// GitHub에 새 파일을 올린 후 페이지를 열면
+// 버전이 다를 경우 자동으로 새로고침됩니다.
+// ────────────────────────────────────────────
+var CURRENT_VERSION = document.querySelector('meta[name="app-version"]').content;
+var VERSION_KEY = 'rq_version';
+
+function checkForUpdate() {
+  var saved = localStorage.getItem(VERSION_KEY);
+  if (saved && saved !== CURRENT_VERSION) {
+    // 새 버전 감지 → 캐시 무시하고 강제 새로고침
+    localStorage.setItem(VERSION_KEY, CURRENT_VERSION);
+    window.location.reload(true);
+    return;
+  }
+  localStorage.setItem(VERSION_KEY, CURRENT_VERSION);
+}
+checkForUpdate();
+
+// ────────────────────────────────────────────
+// Web Audio API - 알림음
+// ────────────────────────────────────────────
+var audioCtx = null;
+
+function getAudioCtx() {
+  if (!audioCtx) {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  }
+  return audioCtx;
+}
+
+function playCorrectSound() {
+  try {
+    var ctx = getAudioCtx();
+    // 밝고 맑은 두 음 연속 (정답)
+    playTone(ctx, 523, 0,    0.15, 'sine'); // C5
+    playTone(ctx, 784, 0.12, 0.2,  'sine'); // G5
+  } catch(e) {}
+}
+
+function playWrongSound() {
+  try {
+    var ctx = getAudioCtx();
+    // 낮고 짧은 두 음 하강 (오답)
+    playTone(ctx, 300, 0,    0.15, 'sawtooth');
+    playTone(ctx, 200, 0.15, 0.2,  'sawtooth');
+  } catch(e) {}
+}
+
+function playTone(ctx, freq, startDelay, duration, type) {
+  var osc = ctx.createOscillator();
+  var gain = ctx.createGain();
+  osc.connect(gain);
+  gain.connect(ctx.destination);
+  osc.type = type;
+  osc.frequency.value = freq;
+  var start = ctx.currentTime + startDelay;
+  gain.gain.setValueAtTime(0.3, start);
+  gain.gain.exponentialRampToValueAtTime(0.001, start + duration);
+  osc.start(start);
+  osc.stop(start + duration);
+}
+
+// ────────────────────────────────────────────
+// 러시아어 TTS
+// ────────────────────────────────────────────
+function speak(text) {
+  if (!('speechSynthesis' in window)) return;
+  window.speechSynthesis.cancel();
+  var utter = new SpeechSynthesisUtterance(text);
+  utter.lang = 'ru-RU';
+  utter.rate = 0.85;
+  utter.pitch = 1.0;
+  window.speechSynthesis.speak(utter);
+}
+
+// ────────────────────────────────────────────
+// 퀴즈 로직
+// ────────────────────────────────────────────
 var words = [
   {ko:"안녕하세요",ru:"Привет",tr:"Privet",hint:"인사"},
   {ko:"감사합니다",ru:"Спасибо",tr:"Spasibo",hint:"인사"},
@@ -309,22 +387,11 @@ var words = [
 ];
 
 var shuffled=[], current=0, score=0, correctCnt=0, wrongCnt=0, answered=false;
-var ttsReady = false;
-
-function speak(text) {
-  if (!('speechSynthesis' in window)) return;
-  window.speechSynthesis.cancel();
-  var utter = new SpeechSynthesisUtterance(text);
-  utter.lang = 'ru-RU';
-  utter.rate = 0.85;
-  utter.pitch = 1.0;
-  window.speechSynthesis.speak(utter);
-}
 
 function startQuiz() {
-  // 시작 버튼 터치로 iOS 음성 컨텍스트 활성화
+  // iOS 음성 컨텍스트 활성화 (터치 이벤트에서 호출)
   speak(' ');
-  ttsReady = true;
+  try { getAudioCtx().resume(); } catch(e) {}
   document.getElementById('startScreen').style.display = 'none';
   shuffled = shuffle(words);
   loadQ();
@@ -358,7 +425,6 @@ function loadQ() {
   var opts = shuffle([q].concat(getWrongs(q)));
   var el = document.getElementById('choices');
   el.innerHTML = '';
-
   for (var i = 0; i < opts.length; i++) {
     (function(o) {
       var b = document.createElement('button');
@@ -375,8 +441,16 @@ function loadQ() {
 }
 
 function handleChoice(o, btn, q) {
+  var isOk = o.ru === q.ru;
+
+  // 알림음 먼저
+  if (isOk) playCorrectSound();
+  else playWrongSound();
+
+  // 러시아어 발음
   speak(o.ru);
-  checkAns(o.ru === q.ru, btn, q);
+
+  checkAns(isOk, btn, q);
 }
 
 function checkAns(isOk, btn, q) {
